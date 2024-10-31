@@ -1,0 +1,713 @@
+"{\"input_messages\":[{\"content\":\"What is a memory bank and how should I create one?\",\"role\":\"user\",\"context\":\"Here are the retrieved documents for relevant context:\
+=== START-RETRIEVED-CONTEXT ===\
+\
+id:/home/ubuntu/subramen/llama-stack-apps/examples/interior_design_assistant/api.py; content:.webp\\\") as is.\
+            \\\"\\\"\\\"\
+        )\
+        description = f\\\"Description: {description}\\\"\
+        message = {\\\"role\\\": \\\"user\\\", \\\"content\\\": [prompt, description]}\
+\
+        response = create_single_turn(self.client, agent_config, [message])\
+        return json.loads(response.strip())\
+\
+    # NOTE: If using a persistent memory bank, building on the fly is not needed\
+    # and LlamaStack apis can leverage existing banks\
+    async def build_memory_bank(self, local_dir: str) -> str:\
+        \\\"\\\"\\\"\
+        Build a memory bank that can be used to store and retrieve images.\
+        \\\"\\\"\\\"\
+        self.live_bank = \\\"interio_bank\\\"\
+        providers = self.client.providers.list()\
+        self.client.memory_banks.register(\
+            memory_bank={\
+                \\\"identifier\\\": self.live_bank,\
+                \\\"embedding_model\\\": \\\"all-MiniLM-L6-v2\\\",\
+                \\\"chunk_size_in_tokens\\\": 512,\
+                \\\"overlap_size_in_tokens\\\": 64,\
+                \\\"provider_id\\\": providers[\\\"memory\\\"][0].provider_id,\
+            }\
+        )\
+\
+        local_dir = Path(local_dir)\
+        # read all files in the provided local_dir\
+        # amd add each file as a document in the memory bank\
+        documents = []\
+        for i, file in enumerate(local_dir.iterdir()):\
+            if file.is_file():\
+                with file.open(\\\"r\\\") as f:\
+                    documents.append(\
+                        {\
+                            \\\"document_id\\\": uuid.uuid4().hex,\
+                            \\\"content\\\": f.read(),\
+                            \\\"mime_type\\\": \\\"text/plain\\\",\
+                        }\
+                    )\
+        # insert the documents into the memory bank\
+        assert len(documents) > 0, \\\"No documents found in the provided directory\\\"\
+        self.client.memory.insert(\
+            bank_id=\\\"interio_bank\\\",\
+            documents=documents,\
+        )\
+\
+        return \\\"interio_bank\\\"\
+\
+\
+async def async_main(host: str, port: int, memory_path: str, image_dir: str):\
+    interio = InterioAgent(memory_path, image_dir)\
+    await interio.initialize(host, port)\
+\
+    # Test query to ensure memory bank is working\
+    # query = (\
+    #     \\\"A rustic, stone-faced fireplace with a wooden mantel and a cast-iron insert.\\\"\
+    # )\
+    # res = interio.client.memory.query(\
+    #     bank_id=interio.bank_id,\
+    #     query=query,\
+    # )\
+    # print(res)\
+\
+    path = input(\\\"Enter Image path >> \\\")\
+\
+    result = await interio\
+id:/home/ubuntu/subramen/llama-stack-apps/examples/interior_design_assistant/api.py; content:            self.bank_id is not None\
+        ), \\\"Setup bank before calling this method via initialize()\\\"\
+\
+        agent_config = AgentConfig(\
+            enable_session_persistence=False,\
+            model=MODEL,\
+            instructions=\\\"\\\",\
+            sampling_params=SamplingParams(strategy=\\\"greedy\\\", temperature=0.0),\
+            tools=[\
+                # Enable memory as a tool for RAG\
+                AgentConfigToolMemoryToolDefinition(\
+                    type=\\\"memory\\\",\
+                    max_chunks=5,\
+                    max_tokens_in_context=2048,\
+                    memory_bank_configs=[\
+                        {\
+                            \\\"type\\\": \\\"vector\\\",\
+                            \\\"bank_id\\\": self.bank_id,\
+                        }\
+                    ],\
+                    query_generator_config={\
+                        \\\"type\\\": \\\"llm\\\",\
+                        \\\"model\\\": MODEL,\
+                        \\\"template\\\": textwrap.dedent(\
+                            \\\"\\\"\\\"\
+                            You are given a conversation between a user and their assistant.\
+                            From this conversation, you need to extract a one sentence description that is being asked for by the user.\
+                            This one sentence description will be used to query a memory bank to retrieve relevant images.\
+\
+                            Analyze the provided conversation and respond with one line description and no other text or explanation.\
+\
+                            Here is the conversation:\
+                            {% for message in messages %}\
+                            {{ message.role }}> {{ message.content }}\
+                            {% endfor %}\
+                            \\\"\\\"\\\"\
+                        ),\
+                    },\
+                )\
+            ],\
+        )\
+\
+        prompt = textwrap.dedent(\
+            \\\"\\\"\\\"\
+            You are given a description of an item.\
+            Your task is to find images of that item in the memory bank that match the description.\
+            Return the top 4 most relevant results.\
+\
+            Return results in the following format:\
+            [\
+                {\
+                    \\\"image\\\": \\\"uri value\\\",\
+                    \\\"description\\\": \\\"description of the image\\\",\
+                },\
+                {\
+                    \\\"image\\\": \\\"uri value\\\",\
+                    \\\"description\\\": \\\"description of the image 2\\\",\
+                }\
+            ]\
+            The uri value is enclosed in the tags <uri> and </uri>.\
+            The description is a summarized explanation of why this item is relevant and how it can enhance the room.\
+\
+            Return JSON as suggested, Do not return any other text or explanations.\
+            Do not create uri values, return actual uri value (eg. \\\"011.webp\\\") as is.\
+            \\\"\\\"\\\"\
+        )\
+        description = f\\\"Description: {description}\\\"\
+        message = {\\\"role\\\": \\\"user\\\", \\\"content\\\": [prompt, description]}\
+\
+        response = create_single_turn(self.client, agent_config, [message])\
+        return json.loads(response.strip())\
+\
+    # NOTE:\
+id:/home/ubuntu/subramen/llama-stack-apps/examples/agent_store/api.py; content: \\\"memory_retrieval\\\":\
+                inserted_context = step.inserted_context\
+            if step.step_type == \\\"tool_execution\\\":\
+                inserted_context = \\\"\\\
+\\\".join([tr.content for tr in step.tool_responses])\
+\
+        return turn.output_message.content, inserted_context\
+\
+    def append_to_live_memory_bank(self, text: str) -> None:\
+        document = Document(\
+            document_id=uuid.uuid4().hex,\
+            content=text,\
+        )\
+        self.client.memory.insert(bank_id=self.live_bank, documents=[document])\
+\
+    async def clear_live_bank(self) -> None:\
+        # FIXME: This is a hack, ideally we should\
+        # clear an existing bank instead of creating a new one\
+        self.live_bank = self.create_live_bank()\
+        self.agents[AgentChoice.Memory] = await self.get_agent(\
+            agent_type=AgentChoice.Memory,\
+            agent_params={\\\"bank_ids\\\": self.bank_ids + [self.live_bank]},\
+        )\
+        self.create_session(AgentChoice.Memory)\
+\
+id:/home/ubuntu/subramen/llama-stack-apps/examples/github_agent_store/agent_utils.py; content:(\
+    client,\
+    agent_name:str, \
+    memory_banks:List[str], \
+    retrieval_config: RetrievalConfig, \
+    model: str):\
+    \
+    rag_tool_config = AgentConfigToolMemoryToolDefinition(**retrieval_config)\
+    rag_tool_config['memory_bank_configs'] = [asdict(MemoryBankConfig(m)) for m in memory_banks]\
+    \
+    agent_config = AgentConfig(\
+        model=model,\
+        instructions=\\\"You are a helpful assistant. \\\",\
+        sampling_params=SamplingParams(\
+            strategy=\\\"greedy\\\", temperature=0.4, top_p=0.95\
+        ),\
+        tools=[rag_tool_config],\
+        enable_session_persistence=True,\
+    )\
+    \
+    response = client.agents.create(agent_config=agent_config)\
+    agent_id = response.agent_id\
+    return agent_id\
+    \
+\
+def process_request(client, agent_id, query):\
+    response = client.agents.session.create(\
+        agent_id=agent_id,\
+        session_name=f\\\"Session-{uuid.uuid4()}\\\",\
+    )\
+    session_id = response.session_id\
+    messages = [UserMessage(content=query, role=\\\"user\\\")]\
+    generator = client.agents.turn.create(\
+        agent_id=agent_id,\
+        session_id=session_id,\
+        messages=messages,\
+        stream=True,\
+    )\
+    \
+id:/home/ubuntu/subramen/llama-stack-apps/examples/github_agent_store/agent_utils.py; content:# create agent\
+# associate banks with agent\
+# create session??\
+\
+from typing import Optional, List\
+from dataclasses import dataclass\
+\
+\\\"\\\"\\\"\
+scratchpad\
+-----------\
+\
+class AgentConfigToolMemoryToolDefinition(TypedDict, total=False):\
+    max_chunks: Required[int]\
+    max_tokens_in_context: Required[int]\
+    memory_bank_configs: MemoryBankConfig  ## Required[Iterable[AgentConfigToolMemoryToolDefinitionMemoryBankConfig]]\
+    query_generator_config: Required[AgentConfigToolMemoryToolDefinitionQueryGeneratorConfig]\
+    type: Required[Literal[\\\"memory\\\"]]\
+    input_shields: List[str]\
+    output_shields: List[str]\
+\
+class AgentConfig(TypedDict, total=False):\
+    enable_session_persistence: Required[bool]\
+    instructions: Required[str]\
+    max_infer_iters: Required[int]\
+    model: Required[str]\
+    input_shields: List[str]\
+    output_shields: List[str]\
+    sampling_params: SamplingParams\
+    tool_choice: Literal[\\\"auto\\\", \\\"required\\\"]\
+    tool_prompt_format: Literal[\\\"json\\\", \\\"function_tag\\\", \\\"python_list\\\"]\
+    \\\"*3\
+    `json` -- Refers to the json format for calling tools. The json format takes the\
+    form like { \\\"type\\\": \\\"function\\\", \\\"function\\\" : { \\\"name\\\": \\\"function_name\\\",\
+    \\\"description\\\": \\\"function_description\\\", \\\"parameters\\\": {...} } }\
+\
+    `function_tag` -- This is an example of how you could define your own user\
+    defined format for making tool calls. The function_tag format looks like this,\
+    <function=function_name>(parameters)</function>\
+\
+    The detailed prompts for each of these formats are added to llama cli\
+    \\\"*3\
+    tools: Iterable[AgentConfigTool]\
+\\\"\\\"\\\"\
+\
+@dataclass\
+class RetrievalConfig:\
+    type: str = \\\"memory\\\"\
+    max_chunks: int = 10\
+    max_tokens_in_context: int = 2048\
+    input_shields: Optional[List[str]] = None\
+    output_shields: Optional[List[str]] = None\
+\
+@dataclass\
+class MemoryBankConfig:\
+    bank_id: str\
+    type: str = \\\"vector\\\"\
+\
+    \
+def build_rag_agent(\
+    client,\
+    agent_name:str, \
+    memory_banks:List[str], \
+    retrieval_config: RetrievalConfig, \
+    model: str):\
+    \
+    rag_tool_config = AgentConfigToolMemoryToolDefinition(**retrieval_config)\
+    rag_tool_config['memory_bank_configs'] = [asdict\
+\
+=== END-RETRIEVED-CONTEXT ===\
+\"}],\"output_attachments\":[],\"output_message\":{\"content\":\"A memory bank is a data storage system used to store and retrieve information in a structured and organized manner. In the context of the provided code, a memory bank is used to store and retrieve images based on a given description.\
+\
+To create a memory bank, you can follow these steps:\
+\
+1. **Choose a memory bank type**: The code uses a vector-based memory bank, which is suitable for storing and retrieving images. You can choose from other types of memory banks depending on your specific requirements.\
+2. **Set up the memory bank configuration**: The memory bank configuration includes settings such as the embedding model, chunk size, overlap size, and provider ID. These settings can be adjusted based on your specific use case.\
+3. **Register the memory bank**: Register the memory bank with the client using the `client.memory_banks.register()` method.\
+4. **Insert documents into the memory bank**: Insert the documents (in this case, images) into the memory bank using the `client.memory.insert()` method.\
+5. **Build the memory bank**: The `build_memory_bank()` method in the provided code creates a memory bank and inserts documents into it.\
+\
+Here's a step-by-step guide to create a memory bank:\
+\
+**Step 1: Choose a memory bank type**\
+\
+In this case, we will use a vector-based memory bank.\
+\
+**Step 2: Set up the memory bank configuration**\
+\
+Create a configuration dictionary with the following settings:\
+```python\
+memory_bank_config = {\
+    \\\"identifier\\\": \\\"my_memory_bank\\\",\
+    \\\"embedding_model\\\": \\\"all-MiniLM-L6-v2\\\",\
+    \\\"chunk_size_in_tokens\\\": 512,\
+    \\\"overlap_size_in_tokens\\\": 64,\
+    \\\"provider_id\\\": providers[\\\"memory\\\"][0].provider_id,\
+}\
+```\
+**Step 3: Register the memory bank**\
+\
+Register the memory bank with the client using the `client.memory_banks.register()` method:\
+```python\
+self.client.memory_banks.register(memory_bank=memory_bank_config)\
+```\
+**Step 4: Insert documents into the memory bank**\
+\
+Insert the documents (images) into the memory bank using the `client.memory.insert()` method:\
+```python\
+documents = []\
+for file in local_dir.iterdir():\
+    if file.is_file():\
+        with file.open(\\\"r\\\") as f:\
+            documents.append(\
+                {\
+                    \\\"document_id\\\": uuid.uuid4().hex,\
+                    \\\"content\\\": f.read(),\
+                    \\\"mime_type\\\": \\\"text/plain\\\",\
+                }\
+            )\
+self.client.memory.insert(bank_id=\\\"my_memory_bank\\\", documents=documents)\
+```\
+**Step 5: Build the memory bank**\
+\
+The `build_memory_bank()` method in the provided code creates a memory bank and inserts documents into it.\
+\
+Here's the complete code to create a memory bank:\
+```python\
+async def build_memory_bank(self, local_dir: str) -> str:\
+    memory_bank_config = {\
+        \\\"identifier\\\": \\\"my_memory_bank\\\",\
+        \\\"embedding_model\\\": \\\"all-MiniLM-L6-v2\\\",\
+        \\\"chunk_size_in_tokens\\\": 512,\
+        \\\"overlap_size_in_tokens\\\": 64,\
+        \\\"provider_id\\\": providers[\\\"memory\\\"][0].provider_id,\
+    }\
+    self.client.memory_banks.register(memory_bank=memory_bank_config)\
+\
+    local_dir = Path(local_dir)\
+    documents = []\
+    for file in local_dir.iterdir():\
+        if file.is_file():\
+            with file.open(\\\"r\\\") as f:\
+                documents.append(\
+                    {\
+                        \\\"document_id\\\": uuid.uuid4().hex,\
+                        \\\"content\\\": f.read(),\
+                        \\\"mime_type\\\": \\\"text/plain\\\",\
+                    }\
+                )\
+    self.client.memory.insert(bank_id=\\\"my_memory_bank\\\", documents=documents)\
+    return \\\"my_memory_bank\\\"\
+```\
+Note that this is a simplified example and you may need to adjust the memory bank configuration and document insertion process based on your specific requirements.\",\"role\":\"assistant\",\"stop_reason\":\"end_of_turn\",\"tool_calls\":[]},\"session_id\":\"7f0b0ecb-b99e-436c-b663-98d55507b17c\",\"started_at\":\"2024-10-30T20:30:42.632676\",\"steps\":[{\"inserted_context\":[\"Here are the retrieved documents for relevant context:\
+=== START-RETRIEVED-CONTEXT ===\
+\",\"id:/home/ubuntu/subramen/llama-stack-apps/examples/interior_design_assistant/api.py; content:.webp\\\") as is.\
+            \\\"\\\"\\\"\
+        )\
+        description = f\\\"Description: {description}\\\"\
+        message = {\\\"role\\\": \\\"user\\\", \\\"content\\\": [prompt, description]}\
+\
+        response = create_single_turn(self.client, agent_config, [message])\
+        return json.loads(response.strip())\
+\
+    # NOTE: If using a persistent memory bank, building on the fly is not needed\
+    # and LlamaStack apis can leverage existing banks\
+    async def build_memory_bank(self, local_dir: str) -> str:\
+        \\\"\\\"\\\"\
+        Build a memory bank that can be used to store and retrieve images.\
+        \\\"\\\"\\\"\
+        self.live_bank = \\\"interio_bank\\\"\
+        providers = self.client.providers.list()\
+        self.client.memory_banks.register(\
+            memory_bank={\
+                \\\"identifier\\\": self.live_bank,\
+                \\\"embedding_model\\\": \\\"all-MiniLM-L6-v2\\\",\
+                \\\"chunk_size_in_tokens\\\": 512,\
+                \\\"overlap_size_in_tokens\\\": 64,\
+                \\\"provider_id\\\": providers[\\\"memory\\\"][0].provider_id,\
+            }\
+        )\
+\
+        local_dir = Path(local_dir)\
+        # read all files in the provided local_dir\
+        # amd add each file as a document in the memory bank\
+        documents = []\
+        for i, file in enumerate(local_dir.iterdir()):\
+            if file.is_file():\
+                with file.open(\\\"r\\\") as f:\
+                    documents.append(\
+                        {\
+                            \\\"document_id\\\": uuid.uuid4().hex,\
+                            \\\"content\\\": f.read(),\
+                            \\\"mime_type\\\": \\\"text/plain\\\",\
+                        }\
+                    )\
+        # insert the documents into the memory bank\
+        assert len(documents) > 0, \\\"No documents found in the provided directory\\\"\
+        self.client.memory.insert(\
+            bank_id=\\\"interio_bank\\\",\
+            documents=documents,\
+        )\
+\
+        return \\\"interio_bank\\\"\
+\
+\
+async def async_main(host: str, port: int, memory_path: str, image_dir: str):\
+    interio = InterioAgent(memory_path, image_dir)\
+    await interio.initialize(host, port)\
+\
+    # Test query to ensure memory bank is working\
+    # query = (\
+    #     \\\"A rustic, stone-faced fireplace with a wooden mantel and a cast-iron insert.\\\"\
+    # )\
+    # res = interio.client.memory.query(\
+    #     bank_id=interio.bank_id,\
+    #     query=query,\
+    # )\
+    # print(res)\
+\
+    path = input(\\\"Enter Image path >> \\\")\
+\
+    result = await interio\",\"id:/home/ubuntu/subramen/llama-stack-apps/examples/interior_design_assistant/api.py; content:            self.bank_id is not None\
+        ), \\\"Setup bank before calling this method via initialize()\\\"\
+\
+        agent_config = AgentConfig(\
+            enable_session_persistence=False,\
+            model=MODEL,\
+            instructions=\\\"\\\",\
+            sampling_params=SamplingParams(strategy=\\\"greedy\\\", temperature=0.0),\
+            tools=[\
+                # Enable memory as a tool for RAG\
+                AgentConfigToolMemoryToolDefinition(\
+                    type=\\\"memory\\\",\
+                    max_chunks=5,\
+                    max_tokens_in_context=2048,\
+                    memory_bank_configs=[\
+                        {\
+                            \\\"type\\\": \\\"vector\\\",\
+                            \\\"bank_id\\\": self.bank_id,\
+                        }\
+                    ],\
+                    query_generator_config={\
+                        \\\"type\\\": \\\"llm\\\",\
+                        \\\"model\\\": MODEL,\
+                        \\\"template\\\": textwrap.dedent(\
+                            \\\"\\\"\\\"\
+                            You are given a conversation between a user and their assistant.\
+                            From this conversation, you need to extract a one sentence description that is being asked for by the user.\
+                            This one sentence description will be used to query a memory bank to retrieve relevant images.\
+\
+                            Analyze the provided conversation and respond with one line description and no other text or explanation.\
+\
+                            Here is the conversation:\
+                            {% for message in messages %}\
+                            {{ message.role }}> {{ message.content }}\
+                            {% endfor %}\
+                            \\\"\\\"\\\"\
+                        ),\
+                    },\
+                )\
+            ],\
+        )\
+\
+        prompt = textwrap.dedent(\
+            \\\"\\\"\\\"\
+            You are given a description of an item.\
+            Your task is to find images of that item in the memory bank that match the description.\
+            Return the top 4 most relevant results.\
+\
+            Return results in the following format:\
+            [\
+                {\
+                    \\\"image\\\": \\\"uri value\\\",\
+                    \\\"description\\\": \\\"description of the image\\\",\
+                },\
+                {\
+                    \\\"image\\\": \\\"uri value\\\",\
+                    \\\"description\\\": \\\"description of the image 2\\\",\
+                }\
+            ]\
+            The uri value is enclosed in the tags <uri> and </uri>.\
+            The description is a summarized explanation of why this item is relevant and how it can enhance the room.\
+\
+            Return JSON as suggested, Do not return any other text or explanations.\
+            Do not create uri values, return actual uri value (eg. \\\"011.webp\\\") as is.\
+            \\\"\\\"\\\"\
+        )\
+        description = f\\\"Description: {description}\\\"\
+        message = {\\\"role\\\": \\\"user\\\", \\\"content\\\": [prompt, description]}\
+\
+        response = create_single_turn(self.client, agent_config, [message])\
+        return json.loads(response.strip())\
+\
+    # NOTE:\",\"id:/home/ubuntu/subramen/llama-stack-apps/examples/agent_store/api.py; content: \\\"memory_retrieval\\\":\
+                inserted_context = step.inserted_context\
+            if step.step_type == \\\"tool_execution\\\":\
+                inserted_context = \\\"\\\
+\\\".join([tr.content for tr in step.tool_responses])\
+\
+        return turn.output_message.content, inserted_context\
+\
+    def append_to_live_memory_bank(self, text: str) -> None:\
+        document = Document(\
+            document_id=uuid.uuid4().hex,\
+            content=text,\
+        )\
+        self.client.memory.insert(bank_id=self.live_bank, documents=[document])\
+\
+    async def clear_live_bank(self) -> None:\
+        # FIXME: This is a hack, ideally we should\
+        # clear an existing bank instead of creating a new one\
+        self.live_bank = self.create_live_bank()\
+        self.agents[AgentChoice.Memory] = await self.get_agent(\
+            agent_type=AgentChoice.Memory,\
+            agent_params={\\\"bank_ids\\\": self.bank_ids + [self.live_bank]},\
+        )\
+        self.create_session(AgentChoice.Memory)\
+\",\"id:/home/ubuntu/subramen/llama-stack-apps/examples/github_agent_store/agent_utils.py; content:(\
+    client,\
+    agent_name:str, \
+    memory_banks:List[str], \
+    retrieval_config: RetrievalConfig, \
+    model: str):\
+    \
+    rag_tool_config = AgentConfigToolMemoryToolDefinition(**retrieval_config)\
+    rag_tool_config['memory_bank_configs'] = [asdict(MemoryBankConfig(m)) for m in memory_banks]\
+    \
+    agent_config = AgentConfig(\
+        model=model,\
+        instructions=\\\"You are a helpful assistant. \\\",\
+        sampling_params=SamplingParams(\
+            strategy=\\\"greedy\\\", temperature=0.4, top_p=0.95\
+        ),\
+        tools=[rag_tool_config],\
+        enable_session_persistence=True,\
+    )\
+    \
+    response = client.agents.create(agent_config=agent_config)\
+    agent_id = response.agent_id\
+    return agent_id\
+    \
+\
+def process_request(client, agent_id, query):\
+    response = client.agents.session.create(\
+        agent_id=agent_id,\
+        session_name=f\\\"Session-{uuid.uuid4()}\\\",\
+    )\
+    session_id = response.session_id\
+    messages = [UserMessage(content=query, role=\\\"user\\\")]\
+    generator = client.agents.turn.create(\
+        agent_id=agent_id,\
+        session_id=session_id,\
+        messages=messages,\
+        stream=True,\
+    )\
+    \",\"id:/home/ubuntu/subramen/llama-stack-apps/examples/github_agent_store/agent_utils.py; content:# create agent\
+# associate banks with agent\
+# create session??\
+\
+from typing import Optional, List\
+from dataclasses import dataclass\
+\
+\\\"\\\"\\\"\
+scratchpad\
+-----------\
+\
+class AgentConfigToolMemoryToolDefinition(TypedDict, total=False):\
+    max_chunks: Required[int]\
+    max_tokens_in_context: Required[int]\
+    memory_bank_configs: MemoryBankConfig  ## Required[Iterable[AgentConfigToolMemoryToolDefinitionMemoryBankConfig]]\
+    query_generator_config: Required[AgentConfigToolMemoryToolDefinitionQueryGeneratorConfig]\
+    type: Required[Literal[\\\"memory\\\"]]\
+    input_shields: List[str]\
+    output_shields: List[str]\
+\
+class AgentConfig(TypedDict, total=False):\
+    enable_session_persistence: Required[bool]\
+    instructions: Required[str]\
+    max_infer_iters: Required[int]\
+    model: Required[str]\
+    input_shields: List[str]\
+    output_shields: List[str]\
+    sampling_params: SamplingParams\
+    tool_choice: Literal[\\\"auto\\\", \\\"required\\\"]\
+    tool_prompt_format: Literal[\\\"json\\\", \\\"function_tag\\\", \\\"python_list\\\"]\
+    \\\"*3\
+    `json` -- Refers to the json format for calling tools. The json format takes the\
+    form like { \\\"type\\\": \\\"function\\\", \\\"function\\\" : { \\\"name\\\": \\\"function_name\\\",\
+    \\\"description\\\": \\\"function_description\\\", \\\"parameters\\\": {...} } }\
+\
+    `function_tag` -- This is an example of how you could define your own user\
+    defined format for making tool calls. The function_tag format looks like this,\
+    <function=function_name>(parameters)</function>\
+\
+    The detailed prompts for each of these formats are added to llama cli\
+    \\\"*3\
+    tools: Iterable[AgentConfigTool]\
+\\\"\\\"\\\"\
+\
+@dataclass\
+class RetrievalConfig:\
+    type: str = \\\"memory\\\"\
+    max_chunks: int = 10\
+    max_tokens_in_context: int = 2048\
+    input_shields: Optional[List[str]] = None\
+    output_shields: Optional[List[str]] = None\
+\
+@dataclass\
+class MemoryBankConfig:\
+    bank_id: str\
+    type: str = \\\"vector\\\"\
+\
+    \
+def build_rag_agent(\
+    client,\
+    agent_name:str, \
+    memory_banks:List[str], \
+    retrieval_config: RetrievalConfig, \
+    model: str):\
+    \
+    rag_tool_config = AgentConfigToolMemoryToolDefinition(**retrieval_config)\
+    rag_tool_config['memory_bank_configs'] = [asdict\",\"\
+=== END-RETRIEVED-CONTEXT ===\
+\"],\"memory_bank_ids\":[\"lsa_examples\"],\"step_id\":\"27e2a855-f025-4260-acec-19c3edca46a9\",\"step_type\":\"memory_retrieval\",\"turn_id\":\"7e46ba89-7392-4a81-8d15-84203773560c\",\"completed_at\":null,\"started_at\":null},{\"inference_model_response\":{\"content\":\"A memory bank is a data storage system used to store and retrieve information in a structured and organized manner. In the context of the provided code, a memory bank is used to store and retrieve images based on a given description.\
+\
+To create a memory bank, you can follow these steps:\
+\
+1. **Choose a memory bank type**: The code uses a vector-based memory bank, which is suitable for storing and retrieving images. You can choose from other types of memory banks depending on your specific requirements.\
+2. **Set up the memory bank configuration**: The memory bank configuration includes settings such as the embedding model, chunk size, overlap size, and provider ID. These settings can be adjusted based on your specific use case.\
+3. **Register the memory bank**: Register the memory bank with the client using the `client.memory_banks.register()` method.\
+4. **Insert documents into the memory bank**: Insert the documents (in this case, images) into the memory bank using the `client.memory.insert()` method.\
+5. **Build the memory bank**: The `build_memory_bank()` method in the provided code creates a memory bank and inserts documents into it.\
+\
+Here's a step-by-step guide to create a memory bank:\
+\
+**Step 1: Choose a memory bank type**\
+\
+In this case, we will use a vector-based memory bank.\
+\
+**Step 2: Set up the memory bank configuration**\
+\
+Create a configuration dictionary with the following settings:\
+```python\
+memory_bank_config = {\
+    \\\"identifier\\\": \\\"my_memory_bank\\\",\
+    \\\"embedding_model\\\": \\\"all-MiniLM-L6-v2\\\",\
+    \\\"chunk_size_in_tokens\\\": 512,\
+    \\\"overlap_size_in_tokens\\\": 64,\
+    \\\"provider_id\\\": providers[\\\"memory\\\"][0].provider_id,\
+}\
+```\
+**Step 3: Register the memory bank**\
+\
+Register the memory bank with the client using the `client.memory_banks.register()` method:\
+```python\
+self.client.memory_banks.register(memory_bank=memory_bank_config)\
+```\
+**Step 4: Insert documents into the memory bank**\
+\
+Insert the documents (images) into the memory bank using the `client.memory.insert()` method:\
+```python\
+documents = []\
+for file in local_dir.iterdir():\
+    if file.is_file():\
+        with file.open(\\\"r\\\") as f:\
+            documents.append(\
+                {\
+                    \\\"document_id\\\": uuid.uuid4().hex,\
+                    \\\"content\\\": f.read(),\
+                    \\\"mime_type\\\": \\\"text/plain\\\",\
+                }\
+            )\
+self.client.memory.insert(bank_id=\\\"my_memory_bank\\\", documents=documents)\
+```\
+**Step 5: Build the memory bank**\
+\
+The `build_memory_bank()` method in the provided code creates a memory bank and inserts documents into it.\
+\
+Here's the complete code to create a memory bank:\
+```python\
+async def build_memory_bank(self, local_dir: str) -> str:\
+    memory_bank_config = {\
+        \\\"identifier\\\": \\\"my_memory_bank\\\",\
+        \\\"embedding_model\\\": \\\"all-MiniLM-L6-v2\\\",\
+        \\\"chunk_size_in_tokens\\\": 512,\
+        \\\"overlap_size_in_tokens\\\": 64,\
+        \\\"provider_id\\\": providers[\\\"memory\\\"][0].provider_id,\
+    }\
+    self.client.memory_banks.register(memory_bank=memory_bank_config)\
+\
+    local_dir = Path(local_dir)\
+    documents = []\
+    for file in local_dir.iterdir():\
+        if file.is_file():\
+            with file.open(\\\"r\\\") as f:\
+                documents.append(\
+                    {\
+                        \\\"document_id\\\": uuid.uuid4().hex,\
+                        \\\"content\\\": f.read(),\
+                        \\\"mime_type\\\": \\\"text/plain\\\",\
+                    }\
+                )\
+    self.client.memory.insert(bank_id=\\\"my_memory_bank\\\", documents=documents)\
+    return \\\"my_memory_bank\\\"\
+```\
+Note that this is a simplified example and you may need to adjust the memory bank configuration and document insertion process based on your specific requirements.\",\"role\":\"assistant\",\"stop_reason\":\"end_of_turn\",\"tool_calls\":[]},\"step_id\":\"e2541daa-aa0b-4225-ab6f-49fc82b20acc\",\"step_type\":\"inference\",\"turn_id\":\"7e46ba89-7392-4a81-8d15-84203773560c\",\"completed_at\":null,\"started_at\":null}],\"turn_id\":\"7e46ba89-7392-4a81-8d15-84203773560c\",\"completed_at\":\"2024-10-30T20:31:05.662462\"}"

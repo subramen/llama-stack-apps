@@ -3,7 +3,15 @@
 # create session??
 
 from typing import Optional, List
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
+from llama_stack_client import LlamaStackClient
+from llama_stack_client.types.agent_create_params import  (
+    AgentConfig,
+    AgentConfigToolMemoryToolDefinition,
+)
+from llama_stack_client.types import SamplingParams, UserMessage
+
+import uuid
 
 """
 scratchpad
@@ -55,19 +63,26 @@ class MemoryBankConfig:
     bank_id: str
     type: str = "vector"
 
+@dataclass
+class QueryGenConfig:
+    sep: str = "\n|||\n"
     
 def build_rag_agent(
-    client,
-    agent_name:str, 
     memory_banks:List[str], 
     retrieval_config: RetrievalConfig, 
-    model: str):
+    client = None
+    ):
     
-    rag_tool_config = AgentConfigToolMemoryToolDefinition(**retrieval_config)
+    if client is None:
+        client = LlamaStackClient(base_url=f"http://localhost:5000")
+        
+    rag_tool_config = AgentConfigToolMemoryToolDefinition(**asdict(retrieval_config))
     rag_tool_config['memory_bank_configs'] = [asdict(MemoryBankConfig(m)) for m in memory_banks]
+    rag_tool_config['query_generator_config'] = asdict(QueryGenConfig())
+    model_id = client.models.list()[0].identifier
     
     agent_config = AgentConfig(
-        model=model,
+        model=model_id,
         instructions="You are a helpful assistant. ",
         sampling_params=SamplingParams(
             strategy="greedy", temperature=0.4, top_p=0.95
@@ -81,13 +96,32 @@ def build_rag_agent(
     return agent_id
     
 
-def format_prompt(rag_query):
-    user_msg = UserMessage(content=)
-
 def process_request(client, agent_id, query):
     response = client.agents.session.create(
         agent_id=agent_id,
         session_name=f"Session-{uuid.uuid4()}",
     )
     session_id = response.session_id
+    messages = [UserMessage(content=query, role="user")]
+    generator = client.agents.turn.create(
+        agent_id=agent_id,
+        session_id=session_id,
+        messages=messages,
+        stream=True,
+    )
     
+    for chunk in generator:
+        event = chunk.event
+        event_type = event.payload.event_type
+        # FIXME: Use the correct event type
+        if event_type == "turn_complete":
+            turn = event.payload.turn
+
+    response = {
+        "query": turn.input_messages[0].content,
+        "context_chunks": turn.input_messages[0].context.split("\n|||\n"),
+        "completion": turn.output_message
+    }
+    return response
+
+
