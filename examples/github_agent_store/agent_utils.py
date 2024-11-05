@@ -2,16 +2,16 @@
 # associate banks with agent
 # create session??
 
-from typing import Optional, List
-from dataclasses import dataclass, asdict
+import uuid
+from dataclasses import asdict, dataclass
+from typing import List, Optional
+
 from llama_stack_client import LlamaStackClient
-from llama_stack_client.types.agent_create_params import  (
+from llama_stack_client.types import SamplingParams, UserMessage
+from llama_stack_client.types.agent_create_params import (
     AgentConfig,
     AgentConfigToolMemoryToolDefinition,
 )
-from llama_stack_client.types import SamplingParams, UserMessage
-
-import uuid
 
 """
 scratchpad
@@ -50,6 +50,7 @@ class AgentConfig(TypedDict, total=False):
     tools: Iterable[AgentConfigTool]
 """
 
+
 @dataclass
 class RetrievalConfig:
     type: str = "memory"
@@ -58,43 +59,48 @@ class RetrievalConfig:
     input_shields: Optional[List[str]] = None
     output_shields: Optional[List[str]] = None
 
+
 @dataclass
 class MemoryBankConfig:
     bank_id: str
     type: str = "vector"
 
+
 @dataclass
 class QueryGenConfig:
     sep: str = "\n|||\n"
-    
+
+
 def build_rag_agent(
-    memory_banks:List[str], 
-    retrieval_config: RetrievalConfig, 
-    client = None
-    ):
-    
+    memory_banks: List[str], retrieval_config: RetrievalConfig, client=None
+):
+
     if client is None:
         client = LlamaStackClient(base_url=f"http://localhost:5000")
-        
+
     rag_tool_config = AgentConfigToolMemoryToolDefinition(**asdict(retrieval_config))
-    rag_tool_config['memory_bank_configs'] = [asdict(MemoryBankConfig(m)) for m in memory_banks]
-    rag_tool_config['query_generator_config'] = asdict(QueryGenConfig())
+    rag_tool_config["memory_bank_configs"] = [
+        asdict(MemoryBankConfig(m)) for m in memory_banks
+    ]
+    rag_tool_config["query_generator_config"] = asdict(QueryGenConfig())
     model_id = client.models.list()[0].identifier
-    
+
     agent_config = AgentConfig(
         model=model_id,
         instructions="You are a helpful assistant. ",
-        sampling_params=SamplingParams(
-            strategy="greedy", temperature=0.4, top_p=0.95
-        ),
+        sampling_params=SamplingParams(strategy="greedy", temperature=0.4, top_p=0.95),
         tools=[rag_tool_config],
         enable_session_persistence=True,
     )
-    
+
     response = client.agents.create(agent_config=agent_config)
     agent_id = response.agent_id
     return agent_id
-    
+
+
+def build_search_agent():
+    pass
+
 
 def process_request(client, agent_id, query):
     response = client.agents.session.create(
@@ -109,7 +115,8 @@ def process_request(client, agent_id, query):
         messages=messages,
         stream=True,
     )
-    
+
+    turn = None
     for chunk in generator:
         event = chunk.event
         event_type = event.payload.event_type
@@ -117,11 +124,13 @@ def process_request(client, agent_id, query):
         if event_type == "turn_complete":
             turn = event.payload.turn
 
+    if turn is None:
+        raise Exception("No turn returned")
+
     response = {
         "query": turn.input_messages[0].content,
         "context_chunks": turn.input_messages[0].context.split("\n|||\n"),
-        "completion": turn.output_message
+        "completion": turn.output_message,
     }
+
     return response
-
-
