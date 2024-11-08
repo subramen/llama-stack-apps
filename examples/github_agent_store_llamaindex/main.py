@@ -7,6 +7,9 @@ from llama_index.core.response_synthesizers import TreeSummarize
 from llama_index.core.retrievers import VectorIndexRetriever
 from llama_index.llms.groq import Groq
 
+from dotenv import load_dotenv
+load_dotenv()
+
 
 ## [P1] Given a repository, can I identify all the resources associated with it?
 
@@ -63,7 +66,7 @@ def test_setup_rag_ensemble(indexes):
         synthesizer = TreeSummarize(
             llm=Groq(
                 model="llama-3.2-3b-preview",
-                api_key="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",
+                api_key=os.getenv("GROQ_API_KEY"),
             ),
             summary_template=qa_prompt,
             verbose=True,

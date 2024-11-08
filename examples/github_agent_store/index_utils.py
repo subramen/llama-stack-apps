@@ -30,12 +30,11 @@ def get_github_repo_docs(
     owner: str,
     repo: str,
     extensions: Optional[Tuple[str]] = None,
-    api_key: Optional[str] = "",
 ):
     base_url = f"https://api.github.com/repos/{owner}/{repo}/contents/"
     headers = {"Accept": "application/vnd.github.v3+json"}
     if api_key:
-        headers["Authorization"] = f"token {api_key}"
+        headers["Authorization"] = f"token {os.getenv("GITHUB_API_KEY")}"
     docs = []
 
     @retry(
@@ -118,11 +117,7 @@ def register_bank(
     embedding_model="all-MiniLM-L6-v2",
     chunk_size_in_tokens=512,
     overlap_size_in_tokens=64,
-    persist=True,
 ):
-    if persist:
-        raise NotImplementedError("Persisting is not yet implemented")
-
     providers = client.providers.list()
     response = client.memory_banks.register(
         memory_bank=dict(

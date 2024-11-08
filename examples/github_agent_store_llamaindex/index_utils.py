@@ -32,12 +32,11 @@ def get_github_repo_files(
     owner: str,
     repo: str,
     extensions: Optional[Tuple[str]] = None,
-    api_key: Optional[str] = "",
 ) -> List[Document]:
     base_url = f"https://api.github.com/repos/{owner}/{repo}/contents/"
     headers = {"Accept": "application/vnd.github.v3+json"}
     if api_key:
-        headers["Authorization"] = f"token {api_key}"
+        headers["Authorization"] = f"token {os.getenv("GITHUB_API_KEY")}"
     docs = []
 
     @retry(

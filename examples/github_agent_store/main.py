@@ -8,23 +8,11 @@ from agent_utils import (
     QueryGenConfig,
     RetrievalConfig,
 )
-from index_utils import create_index, get_directory_files, get_github_repo_docs
+from index_utils import create_index, get_directory_docs, get_github_repo_docs
 from llama_stack_client import LlamaStackClient
 
-from requests import session
-
-## [P1] Given a repository, can I identify all the resources associated with it?
-
-## [P0] Index documentation on separate memory bank
-### recursive scrape of website
-
-## [P0] Index code on separate memory bank
-### github recursive thru repo
-
-## [P0] Create agent associated with both memory banks
-
-## [P1] Insert new document in appropriate memory bank
-
+from dotenv import load_dotenv
+load_dotenv()
 
 host = "localhost"
 port = 5000
@@ -33,7 +21,7 @@ CLIENT = LlamaStackClient(base_url=f"http://{host}:{port}")
 
 def test_setup_index_files(directory):
     extensions = ("py", "md")
-    docs = get_directory_files(directory, extensions)
+    docs = get_directory_docs(directory, extensions)
     py = [d for d in docs if d["metadata"]["extension"] == "py"]
     md = [d for d in docs if d["metadata"]["extension"] == "md"]
     create_index(CLIENT, py, f"{directory}/python")
@@ -56,7 +44,7 @@ def test_setup_rag_ensemble():
 
     # need more details on what this is and how to use it
     # can this include the prompt template i.e. how the context_str and query_str are passed to the llm?
-    query_gen_config = QueryGenConfig()
+    query_gen_config = QueryGenConfig()  # no-op at this time
 
     rag_ensemble = {}
     for bank in memory_banks:
@@ -83,7 +71,7 @@ def test_setup_search_agent():
     search_tool = {
         "type": "brave_search",
         "engine": "brave",
-        "api_key": os.getenv("BRAVE_SEARCH_API_KEY"),
+        "api_key": os.getenv("BRAVE_SEARCH_API_KEY")
     }
 
     agent = build_agent(
@@ -91,7 +79,6 @@ def test_setup_search_agent():
         instructions=system_prompt,
         tool_configs=[search_tool],
         sampling_params={"top_p": 0.9, "temperature": 0.7},
-        # not sure what these do exactly
         kwargs=dict(
             tool_choice="auto",
             tool_prompt_format="function_tag",
@@ -102,9 +89,33 @@ def test_setup_search_agent():
 
 def test_query_ensemble(rag_ensemble, query):
     ensemble_responses = {}
-    session_id = None
+    messages = [{"role": "user", "content": query}]
     for name, agent in rag_ensemble.items():
-        response = query_agent(CLIENT, agent, query, session_id)
-        session_id = response["session_id"]
+        response = query_agent(CLIENT, agent, messages)
         ensemble_responses[name] = response
     return ensemble_responses
+
+
+def test():
+    directory = "/home/ubuntu/subramen/llama-recipes"
+    query = "What methods are best for finetuning llama?"
+    
+    test_setup_index_files(directory)
+    rag_store = test_setup_rag_ensemble()
+    answers = test_query_ensemble(rag_store, query)
+    
+    
+    context = '\n* '.join([a['completion'].content for a in answers.values()])
+    message = [{
+        "role": "user",
+        "content": f"Query: {query}\n\nSpecialist answers:{context}"
+    }]
+    search_agent = test_setup_search_agent()
+    response = query_agent(CLIENT, search_agent, message)
+    
+    ### role='user' content='Query: What methods are best for finetuning llama?\n\nSpecialist answers:Based on the provided context, it appears that finetuning LLaMA is not directly mentioned in the code snippets. However, I can infer that finetuning LLaMA is likely to be performed using the `llama_recipes.finetuning` module.\n\nIn the `finetuning.py` file, the `main` function is imported from `llama_recipes.finetuning`, which suggests that this file contains the code for finetuning LLaMA.\n\nTo finetun...<more>...Guard.\n\nAs for finetuning Llama in general, it seems that the provided context only provides information on finetuning Llama Guard, which is a specific application of the Llama model. For general finetuning of Llama, you may need to refer to the official documentation or other external resources.\n\nHowever, based on the provided context, it seems that the `finetune_vision_model.md` file in the `quickstart` folder may provide some information on finetuning Llama for vision tasks.' context=None
+    ### AssertionError: Tool code_interpreter not found
+    ### How to disable using code_interpreter?
+    
+    
+    

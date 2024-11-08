@@ -1,3 +1,4 @@
 llama-index
 llama-index-embeddings-huggingface
 urllib3<3
+python-dotenv
