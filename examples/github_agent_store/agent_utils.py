@@ -7,11 +7,14 @@ from dataclasses import asdict, dataclass
 from typing import List, Optional
 
 from llama_stack_client import LlamaStackClient
+from llama_stack_client.lib.agents.agent import Agent
 from llama_stack_client.types import SamplingParams, UserMessage
 from llama_stack_client.types.agent_create_params import (
     AgentConfig,
     AgentConfigToolMemoryToolDefinition,
 )
+
+from requests import session
 
 """
 scratchpad
@@ -71,56 +74,70 @@ class QueryGenConfig:
     sep: str = "\n|||\n"
 
 
-def build_rag_agent(
-    memory_banks: List[str], retrieval_config: RetrievalConfig, client=None
+def get_rag_tool(
+    retrieval_config: RetrievalConfig,
+    memory_banks: List[str],
+    query_generator_config: QueryGenConfig,
 ):
-
-    if client is None:
-        client = LlamaStackClient(base_url=f"http://localhost:5000")
-
-    rag_tool_config = AgentConfigToolMemoryToolDefinition(**asdict(retrieval_config))
+    rag_tool_config = asdict(retrieval_config)
     rag_tool_config["memory_bank_configs"] = [
         asdict(MemoryBankConfig(m)) for m in memory_banks
     ]
-    rag_tool_config["query_generator_config"] = asdict(QueryGenConfig())
-    model_id = client.models.list()[0].identifier
+    rag_tool_config["query_generator_config"] = asdict(query_generator_config)
+    return rag_tool_config
+
+
+def build_agent(
+    client: LlamaStackClient,
+    model_id: Optional[str] = None,
+    instructions: Optional[str] = None,
+    tool_configs: List = [],
+    sampling_params: SamplingParams = {},
+    enable_session_persistence: bool = False,
+    kwargs: Optional[dict] = {},
+):
+    if model_id is None:
+        model_id = client.models.list()[0].identifier
 
     agent_config = AgentConfig(
         model=model_id,
-        instructions="You are a helpful assistant. ",
-        sampling_params=SamplingParams(strategy="greedy", temperature=0.4, top_p=0.95),
-        tools=[rag_tool_config],
-        enable_session_persistence=True,
+        instructions=instructions,
+        sampling_params=sampling_params,
+        tools=tool_configs,
+        enable_session_persistence=enable_session_persistence,
+        **kwargs,
     )
-
-    response = client.agents.create(agent_config=agent_config)
-    agent_id = response.agent_id
-    return agent_id
+    return Agent(client, agent_config)
 
 
-def build_search_agent():
-    pass
+# def query_agent(agent, user_prompt, session_id=None):
+#     if session_id is None:
+#         session_id = agent.create_session(f"test-{uuid.uuid4()}")
+
+#     completion = agent.create_turn(
+#         messages=[{"role": "user", "content": user_prompt}], session_id=session_id
+#     )
 
 
-def process_request(client, agent_id, query):
-    response = client.agents.session.create(
-        agent_id=agent_id,
-        session_name=f"Session-{uuid.uuid4()}",
-    )
-    session_id = response.session_id
-    messages = [UserMessage(content=query, role="user")]
+def query_agent(client, agent, query, session_id=None):
+    if session_id is None:
+        session_id = agent.create_session(f"test-{uuid.uuid4()}")
+        print(f"Created new session: {session_id}")
+
+    agent_id = agent.agent_id
+    messages = [{"role": "user", "content": query}]
     generator = client.agents.turn.create(
         agent_id=agent_id,
-        session_id=session_id,
         messages=messages,
         stream=True,
     )
 
     turn = None
+    ## Manually iterating here is a bit ugly;
+    ## can this be under a function eg: generator.get_turn()
     for chunk in generator:
         event = chunk.event
         event_type = event.payload.event_type
-        # FIXME: Use the correct event type
         if event_type == "turn_complete":
             turn = event.payload.turn
 
@@ -131,6 +148,43 @@ def process_request(client, agent_id, query):
         "query": turn.input_messages[0].content,
         "context_chunks": turn.input_messages[0].context.split("\n|||\n"),
         "completion": turn.output_message,
+        "session_id": session_id,
     }
 
     return response
+
+
+#############
+
+
+# def build_rag_agent(
+#     memory_banks: List[str], retrieval_config: RetrievalConfig, client=None
+# ):
+
+#     if client is None:
+#         client = LlamaStackClient(base_url=f"http://localhost:5000")
+
+#     rag_tool_config = asdict(retrieval_config)
+#     rag_tool_config["memory_bank_configs"] = [
+#         asdict(MemoryBankConfig(m)) for m in memory_banks
+#     ]
+#     rag_tool_config["query_generator_config"] = asdict(QueryGenConfig())
+
+#     model_id = client.models.list()[0].identifier
+
+#     agent_config = AgentConfig(
+#         model=model_id,
+#         instructions="You are a helpful assistant. ",
+#         sampling_params=SamplingParams(strategy="greedy", temperature=0.4, top_p=0.95),
+#         tools=[rag_tool_config],
+#         enable_session_persistence=True,
+#     )
+#     # response = client.agents.create(agent_config=agent_config)
+#     # agent_id = response.agent_id
+#     # return agent_id
+
+#     return Agent(client, agent_config)
+
+
+# def build_search_agent():
+#     pass

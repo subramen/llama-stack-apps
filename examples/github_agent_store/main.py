@@ -1,8 +1,17 @@
-from agent_utils import RetrievalConfig, build_rag_agent, process_request
-from index_utils import get_github_repo_docs, register_bank
-from llama_stack_client import LlamaStackClient
+import os
 from typing import List
-import requests
+
+from agent_utils import (
+    build_agent,
+    get_rag_tool,
+    query_agent,
+    QueryGenConfig,
+    RetrievalConfig,
+)
+from index_utils import create_index, get_directory_files, get_github_repo_docs
+from llama_stack_client import LlamaStackClient
+
+from requests import session
 
 ## [P1] Given a repository, can I identify all the resources associated with it?
 
@@ -19,65 +28,83 @@ import requests
 
 host = "localhost"
 port = 5000
-client = LlamaStackClient(base_url=f"http://{host}:{port}")
-    
-    
-def insert_docs_in_bank(
-    docs: List["Document"],
-    bank: str,
-    client = None
-):  
-    if client is None:
-        client = LlamaStackClient(base_url=f"http://localhost:5000")
-    
-    existing_banks = [x.identifier for x in client.memory_banks.list()]
-    if not bank in existing_banks:
-        register_bank(client, bank)
-        
-    response = client.memory.insert(
-        bank_id=bank,
-        documents=docs
-    )
-    return response
+CLIENT = LlamaStackClient(base_url=f"http://{host}:{port}")
 
 
-def test_setup_index(owner="meta-llama", repo="llama-recipes"):
-    extensions = ('py', 'md')
+def test_setup_index_files(directory):
+    extensions = ("py", "md")
+    docs = get_directory_files(directory, extensions)
+    py = [d for d in docs if d["metadata"]["extension"] == "py"]
+    md = [d for d in docs if d["metadata"]["extension"] == "md"]
+    create_index(CLIENT, py, f"{directory}/python")
+    create_index(CLIENT, md, f"{directory}/markdown")
+
+
+def test_setup_index_gh(owner, repo):
+    extensions = ("py", "md")
     docs = get_github_repo_docs(owner, repo, extensions)
-    py = [d for d in docs if d['metadata']['extension'] == 'py']
-    md = [d for d in docs if d['metadata']['extension'] == 'md']
-    insert_docs_in_bank(py, f'{owner}/{repo}/python')
-    insert_docs_in_bank(md, f'{owner}/{repo}/markdown')
+    py = [d for d in docs if d["metadata"]["extension"] == "py"]
+    md = [d for d in docs if d["metadata"]["extension"] == "md"]
+    create_index(CLIENT, py, f"{owner}/{repo}/python")
+    create_index(CLIENT, md, f"{owner}/{repo}/markdown")
 
 
-def test_setup_agent_store(owner="meta-llama", repo="llama-recipes"):
-    host = "localhost"
-    port = 5000
-    client = LlamaStackClient(base_url=f"http://{host}:{port}")
-    
+def test_setup_rag_ensemble():
     # register an agent for each bank
-    existing_banks = [x.identifier for x in client.memory_banks.list()]
-    retrieval = RetrievalConfig(max_chunks=20, max_tokens_in_context=6000)
-    agent_store = {bank: build_rag_agent(bank, retrieval, client) for bank in existing_banks}    
-    return agent_store
+    memory_banks = [x.identifier for x in CLIENT.memory_banks.list()]
+    retrieval_config = RetrievalConfig(max_chunks=20, max_tokens_in_context=6000)
 
-    # TODO
-    # register a master agent that can search the web. master consumes all the repsonses from agents and generates a new consolidated answer.
-    
-    
+    # need more details on what this is and how to use it
+    # can this include the prompt template i.e. how the context_str and query_str are passed to the llm?
+    query_gen_config = QueryGenConfig()
 
-def test_query_agent(agent_store, query):
-    host = "localhost"
-    port = 5000
-    client = LlamaStackClient(base_url=f"http://{host}:{port}")
-    for bank, agent_id in agent_store.items():
-        response = process_request(client, agent_id, query)
-        print(f"Response from {bank}:\n==========\n")
-        print(response['completion]'].content)
-        print("Context used:\n==========\n")
-        print(response['context_chunks'])
-        
-    return response
+    rag_ensemble = {}
+    for bank in memory_banks:
+        file_type = bank.split("/")[-1]
+        system_prompt = f"""
+        You are an experienced software developer and an expert at answering questions about software libraries. 
+        Given a question, use the provided context obtained from this library's {file_type} files to answer the question. 
+        """
+        rag_tool = get_rag_tool(retrieval_config, [bank], query_gen_config)
+        agent = build_agent(
+            CLIENT,
+            instructions=system_prompt,
+            tool_configs=[rag_tool],
+            sampling_params={"top_p": 0.9, "temperature": 0.7},
+        )
+        rag_ensemble[bank] = agent
 
-    
-    
+    return rag_ensemble
+
+
+def test_setup_search_agent():
+    system_prompt = "You are an expert customer support agent for open source software libraries. You are helped by a team of specialists who provide you with the context you need to answer questions. Use this context to synthesize a high-quality answer to the question. You can search the web to verify your answer or include additional information if necessary."
+
+    search_tool = {
+        "type": "brave_search",
+        "engine": "brave",
+        "api_key": os.getenv("BRAVE_SEARCH_API_KEY"),
+    }
+
+    agent = build_agent(
+        CLIENT,
+        instructions=system_prompt,
+        tool_configs=[search_tool],
+        sampling_params={"top_p": 0.9, "temperature": 0.7},
+        # not sure what these do exactly
+        kwargs=dict(
+            tool_choice="auto",
+            tool_prompt_format="function_tag",
+        ),
+    )
+    return agent
+
+
+def test_query_ensemble(rag_ensemble, query):
+    ensemble_responses = {}
+    session_id = None
+    for name, agent in rag_ensemble.items():
+        response = query_agent(CLIENT, agent, query, session_id)
+        session_id = response["session_id"]
+        ensemble_responses[name] = response
+    return ensemble_responses
