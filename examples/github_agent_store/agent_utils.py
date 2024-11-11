@@ -94,7 +94,7 @@ def query_agent(client, agent, messages, session_id=None):
 
     response = {
         "query": turn.input_messages[0].content,
-        "context_chunks": turn.input_messages[0].context.split("\n|||\n"),
+        "context_chunks": turn.input_messages[0].context,
         "completion": turn.output_message,
         "session_id": session_id,
     }

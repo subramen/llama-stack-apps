@@ -33,8 +33,7 @@ def get_github_repo_docs(
 ):
     base_url = f"https://api.github.com/repos/{owner}/{repo}/contents/"
     headers = {"Accept": "application/vnd.github.v3+json"}
-    if api_key:
-        headers["Authorization"] = f"token {os.getenv("GITHUB_API_KEY")}"
+    headers["Authorization"] = f"token {os.getenv('GITHUB_API_KEY')}"
     docs = []
 
     @retry(

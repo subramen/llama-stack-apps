@@ -110,13 +110,19 @@ def test():
         "role": "user",
         "content": f"Query: {query}\n\nSpecialist answers:{context}"
     }]
-    search_agent = test_setup_search_agent()
-    response = query_agent(CLIENT, search_agent, message)
-    print(response['completion'].content)
+    
+    try:
+        # This doesn't work https://github.com/meta-llama/llama-stack/issues/407
+        search_agent = test_setup_search_agent()
+        response = query_agent(CLIENT, search_agent, message)
+        print(response['completion'].content)
+    except:
+        print(message[0]['content'])
     
     ### role='user' content='Query: What methods are best for finetuning llama?\n\nSpecialist answers:Based on the provided context, it appears that finetuning LLaMA is not directly mentioned in the code snippets. However, I can infer that finetuning LLaMA is likely to be performed using the `llama_recipes.finetuning` module.\n\nIn the `finetuning.py` file, the `main` function is imported from `llama_recipes.finetuning`, which suggests that this file contains the code for finetuning LLaMA.\n\nTo finetun...<more>...Guard.\n\nAs for finetuning Llama in general, it seems that the provided context only provides information on finetuning Llama Guard, which is a specific application of the Llama model. For general finetuning of Llama, you may need to refer to the official documentation or other external resources.\n\nHowever, based on the provided context, it seems that the `finetune_vision_model.md` file in the `quickstart` folder may provide some information on finetuning Llama for vision tasks.' context=None
     ### AssertionError: Tool code_interpreter not found
     ### How to disable using code_interpreter?
     
-    
+if __name__ == "__main__":
+    test()
     
