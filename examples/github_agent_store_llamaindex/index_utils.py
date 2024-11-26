@@ -5,7 +5,7 @@ from typing import Callable, List, Optional, Tuple
 import fire
 import requests
 
-from llama_index.core import Document, Settings, VectorStoreIndex
+from llama_index.core import Document, SummaryIndex, VectorStoreIndex
 from llama_index.core.node_parser import TokenTextSplitter
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from smart_open import open as smart_open
@@ -113,7 +113,7 @@ def get_directory_files(
     return docs
 
 
-def create_index(docs: List[Document], persist=True):
+def create_indexes(docs: List[Document], persist=True):
     # index = VectorStoreIndex.from_documents(docs)  # equivalent to memory_banks.register() + memory.insert()
     splitter = TokenTextSplitter(
         chunk_size=512,
@@ -122,7 +122,13 @@ def create_index(docs: List[Document], persist=True):
     )
     nodes = splitter.get_nodes_from_documents(docs)
     embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
-    index = VectorStoreIndex(nodes, embed_model=embed_model)  # customizability
+    vector_index = VectorStoreIndex(nodes, embed_model=embed_model)
+    summary_index = SummaryIndex(nodes, embed_model=embed_model)
     if persist:
-        index.storage_context.persist(persist_dir="./cache")
-    return index
+        vector_index.storage_context.persist(persist_dir="./cache")
+        summary_index.storage_context.persist(persist_dir="./cache")
+
+    return {
+        "vector_index": vector_index,
+        "summary_index": summary_index,
+    }
