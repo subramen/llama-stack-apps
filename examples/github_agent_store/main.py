@@ -44,8 +44,7 @@ def test_setup_rag_ensemble():
 
     # need more details on what this is and how to use it
     # can this include the prompt template i.e. how the context_str and query_str are passed to the llm?
-    query_gen_config = QueryGenConfig()  # no-op at this time
-
+    query_gen_config = QueryGenConfig()  
     rag_ensemble = {}
     for bank in memory_banks:
         file_type = bank.split("/")[-1]
@@ -81,7 +80,7 @@ def test_setup_search_agent():
         sampling_params={"top_p": 0.9, "temperature": 0.7},
         kwargs=dict(
             tool_choice="auto",
-            tool_prompt_format="function_tag",
+            tool_prompt_format="json",
         ),
     )
     return agent

@@ -27,7 +27,8 @@ class MemoryBankConfig:
 
 @dataclass
 class QueryGenConfig:
-    sep: str = "\n|||\n"
+    type: str = "default"     # what does this do?
+    sep: str = "\n|||\n"     # what does this do?
 
 
 def get_rag_tool(
@@ -40,8 +41,7 @@ def get_rag_tool(
         asdict(MemoryBankConfig(m)) for m in memory_banks
     ]
     
-    ### throws an error: fastapi.exceptions.RequestValidationError: [{'type': 'union_tag_not_found', 'loc': ('body', 'agent_config', 'tools', 0, 'memory', 'query_generator_config'), 'msg': "Unable to extract tag using discriminator 'type'", 'input': {'sep': '\n|||\n'}, 'ctx': {'discriminator': "'type'"}}]
-    # rag_tool_config["query_generator_config"] = asdict(query_generator_config)
+    rag_tool_config["query_generator_config"] = asdict(query_generator_config)
     
     return rag_tool_config
 
